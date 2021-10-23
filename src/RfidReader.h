@@ -4,28 +4,47 @@
 #include <MFRC522.h>
 #include "Definitions.h"
 
-const uint8_t UID_BYTE_SIZE = 4; 
+const uint8_t UID_MAX_BYTE_SIZE = 10; 
 
 struct UID {
-  byte id[UID_BYTE_SIZE];
+  byte id[UID_MAX_BYTE_SIZE];
 
   bool compareRaw(MFRC522::Uid other) 
   {
-    if(other.size != UID_BYTE_SIZE)
+    const uint8_t uid_byte_size = other.size;
+
+    // if(other.size != UID_BYTE_SIZE)
+    // {
+    //   Serial.print("compareRaw() ERROR: id size mismatch, MFRC522::Uid.size: ");
+    //   Serial.print(other.size);
+
+    // }
+
+    switch(uid_byte_size)
     {
-      Serial.print("compareRaw() ERROR: id size mismatch, MFRC522::Uid.size: ");
-      Serial.println(other.size);
+      case 4: //MIFARE_DESFIRE among others
+        break;
+      case 7: //Unknown PICC(tag) type
+        break;
+      case 10:
+        break;
+      default:
+        Serial.print("Unsupported tag!");
+        Serial.print("compareRaw() ERROR: id size mismatch, MFRC522::Uid.size: ");
+        Serial.println(other.size);
+        return false;
     }
+
     
     // Serial.println();
-    for(uint8_t i = 0; i < UID_BYTE_SIZE; i++) 
+    for(uint8_t i = 0; i < uid_byte_size; i++) 
     {
 
 
       // Serial.print(id[i], 16);
       // Serial.print(" ");
       // Serial.print(other.uidByte[i], 16);
-      // Serial.print(" ");
+      // Serial.println("");
       if(id[i] != other.uidByte[i])
           return false;
     }
@@ -35,7 +54,7 @@ struct UID {
 
   bool compare(UID other)
   {
-    for(uint8_t i = 0; i < UID_BYTE_SIZE; i++) 
+    for(uint8_t i = 0; i < UID_MAX_BYTE_SIZE; i++) 
     {
       // Serial.print(id[i], 16);
       // Serial.print(" ");
@@ -50,9 +69,14 @@ struct UID {
   String toString()
   {
     String uidStr = "";
-    for(uint8_t i = 0; i < 4; i++)
+    for(uint8_t i = 0; i < UID_MAX_BYTE_SIZE; i++)
     {
-        uidStr.concat(String(id[i], HEX));
+
+      if(id[i] < 16)
+      {
+        uidStr.concat('0');
+      }
+      uidStr.concat(String(id[i], HEX));
     }
     return uidStr;
   }
@@ -61,22 +85,23 @@ struct UID {
 class RfidReader
 {
 public:
-  RfidReader(uint8_t ss_pin, uint8_t rst_pin, UID companion_tag = {{0,0,0,0}}) 
-  : m_RfidReader(MFRC522(ss_pin, rst_pin)), m_CompanionTag(companion_tag), m_CurrentTag({{0,0,0,0}})
+  RfidReader(uint8_t ss_pin, uint8_t rst_pin, UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) 
+  : m_RfidReader(MFRC522(ss_pin, rst_pin)), m_CompanionTag(companion_tag), m_CurrentTag({{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
   {
+    // Serial.println("RfidReader constructor");
     m_RfidReader.PCD_Init();
     m_RfidReader.PCD_DumpVersionToSerial();
     Serial.print("companion tag: "); Serial.println(m_CompanionTag.toString());
     m_Callback = nullptr;
     m_ReaderID = m_ReaderCount;
     m_ReaderCount += 1;
-    Serial.println(m_ReaderID);
+    // Serial.println(m_ReaderID);
 
   }
 
   ~RfidReader() { free(m_Callback); }
 
-  void setCallback(void(*callback)(int))
+  void setCallback(void(*callback)(int,bool))
   {
     m_Callback = callback;
   }
@@ -88,7 +113,7 @@ public:
     bool status = true;
 
     //Look for new cards 
-    byte bufferATQA[2];
+    byte bufferATQA[8];
 	  byte bufferSize = sizeof(bufferATQA);
 	  m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::TxModeReg, 0x00);
 	  m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::RxModeReg, 0x00);
@@ -96,8 +121,8 @@ public:
   
 	  MFRC522::StatusCode result = m_RfidReader.PICC_RequestA(bufferATQA, &bufferSize);
     if(result != MFRC522::StatusCode::STATUS_OK      &&
-       result != MFRC522::StatusCode::STATUS_TIMEOUT &&
-       result != MFRC522::StatusCode::STATUS_COLLISION)
+       result != MFRC522::StatusCode::STATUS_TIMEOUT)// &&
+       //result != MFRC522::StatusCode::STATUS_COLLISION)
     {
       status = false;
       Serial.print("ERROR: PICC_RequestA returned with status "); Serial.println(result);
@@ -111,12 +136,25 @@ public:
       status = false;
       Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
     }
+
+    //If error try reset
+    if(false == status) 
+    {
+      Serial.println("Resetting reader due to error");
+      m_RfidReader.PCD_Reset();
+      delay(1000);
+      m_RfidReader.PCD_Init();
+      delay(1000);
+      // m_RfidReader.PCD_DumpVersionToSerial();
+    }
+
     return status;
   }
 
   bool isResponseValid()
   {
     bool isValid = false;
+    // m_RfidReader.PICC_DumpToSerial(&m_RfidReader.uid);
     
     //UID is can be of byte length 4, 7 or 10
     if(m_RfidReader.uid.size == 4 || m_RfidReader.uid.size == 7 || m_RfidReader.uid.size == 10  )
@@ -125,6 +163,7 @@ public:
       MFRC522::PICC_Type type = m_RfidReader.PICC_GetType(m_RfidReader.uid.sak);
       if(type != MFRC522::PICC_Type::PICC_TYPE_UNKNOWN && type != MFRC522::PICC_Type::PICC_TYPE_NOT_COMPLETE)
       {
+        // Serial.print("SAK type: "); Serial.println(m_RfidReader.uid.sak);
         isValid = true;
       }
     }
@@ -135,9 +174,9 @@ public:
   bool checkNewTag() 
   {
     bool newTag = false;
-    if(false == m_CurrentTag.compareRaw(m_RfidReader.uid))
+    if(false == m_CurrentTag.compareRaw(m_RfidReader.uid)) // Tag ID changed
     {
-      memcpy(m_CurrentTag.id, m_RfidReader.uid.uidByte, 4);
+      memcpy(m_CurrentTag.id, m_RfidReader.uid.uidByte, m_RfidReader.uid.size);
 
       Serial.print("Reader "); Serial.print(m_ReaderID);
       //Check if this is the companion tag
@@ -145,15 +184,20 @@ public:
       {
         Serial.print(" my tag ID! ");
         Serial.println(m_CurrentTag.toString());
+
         if(m_Callback != nullptr)
         {
-          m_Callback(m_ReaderID);
+          m_Callback(m_ReaderID, true);
         }
       }
       else
       {
         Serial.print(" Unknown tag ID: ");
         Serial.println(m_CurrentTag.toString());
+        if(m_Callback != nullptr)
+        {
+          m_Callback(m_ReaderID, false);
+        }
       }
 
       newTag = true;
@@ -168,7 +212,7 @@ private:
   UID m_CompanionTag;
   UID m_CurrentTag;
   
-  void (*m_Callback)(int);
+  void (*m_Callback)(int, bool);
 
 };
 
