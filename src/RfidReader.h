@@ -13,13 +13,6 @@ struct UID {
   {
     const uint8_t uid_byte_size = other.size;
 
-    // if(other.size != UID_BYTE_SIZE)
-    // {
-    //   Serial.print("compareRaw() ERROR: id size mismatch, MFRC522::Uid.size: ");
-    //   Serial.print(other.size);
-
-    // }
-
     switch(uid_byte_size)
     {
       case 4: //MIFARE_DESFIRE among others
@@ -35,20 +28,11 @@ struct UID {
         return false;
     }
 
-    
-    // Serial.println();
     for(uint8_t i = 0; i < uid_byte_size; i++) 
     {
-
-
-      // Serial.print(id[i], 16);
-      // Serial.print(" ");
-      // Serial.print(other.uidByte[i], 16);
-      // Serial.println("");
       if(id[i] != other.uidByte[i])
           return false;
     }
-    // Serial.println();
     return true;
   }
 
@@ -56,10 +40,6 @@ struct UID {
   {
     for(uint8_t i = 0; i < UID_MAX_BYTE_SIZE; i++) 
     {
-      // Serial.print(id[i], 16);
-      // Serial.print(" ");
-      // Serial.print(other.id[i], 16);
-      // Serial.print(" ");
       if(id[i] != other.id[i])
         return false;
     }
@@ -88,15 +68,12 @@ public:
   RfidReader(uint8_t ss_pin, uint8_t rst_pin, UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) 
   : m_RfidReader(MFRC522(ss_pin, rst_pin)), m_CompanionTag(companion_tag), m_CurrentTag({{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
   {
-    // Serial.println("RfidReader constructor");
     m_RfidReader.PCD_Init();
     m_RfidReader.PCD_DumpVersionToSerial();
     Serial.print("companion tag: "); Serial.println(m_CompanionTag.toString());
     m_Callback = nullptr;
     m_ReaderID = m_ReaderCount;
     m_ReaderCount += 1;
-    // Serial.println(m_ReaderID);
-
   }
 
   ~RfidReader() { free(m_Callback); }
@@ -104,6 +81,12 @@ public:
   void setCallback(void(*callback)(int,bool))
   {
     m_Callback = callback;
+  }
+
+  void clearUidCache() {
+    for(int byte = 0; byte < 10; byte++) {
+      m_RfidReader.uid.uidByte[byte] = 0;
+    }
   }
 
   // Due to use of "counterfeit" MFRC522 the library is not completely compatible
@@ -121,8 +104,7 @@ public:
   
 	  MFRC522::StatusCode result = m_RfidReader.PICC_RequestA(bufferATQA, &bufferSize);
     if(result != MFRC522::StatusCode::STATUS_OK      &&
-       result != MFRC522::StatusCode::STATUS_TIMEOUT)// &&
-       //result != MFRC522::StatusCode::STATUS_COLLISION)
+       result != MFRC522::StatusCode::STATUS_TIMEOUT)
     {
       status = false;
       Serial.print("ERROR: PICC_RequestA returned with status "); Serial.println(result);
@@ -137,24 +119,12 @@ public:
       Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
     }
 
-    //If error try reset
-    if(false == status) 
-    {
-      Serial.println("Resetting reader due to error");
-      m_RfidReader.PCD_Reset();
-      delay(1000);
-      m_RfidReader.PCD_Init();
-      delay(1000);
-      // m_RfidReader.PCD_DumpVersionToSerial();
-    }
-
     return status;
   }
 
   bool isResponseValid()
   {
     bool isValid = false;
-    // m_RfidReader.PICC_DumpToSerial(&m_RfidReader.uid);
     
     //UID is can be of byte length 4, 7 or 10
     if(m_RfidReader.uid.size == 4 || m_RfidReader.uid.size == 7 || m_RfidReader.uid.size == 10  )
