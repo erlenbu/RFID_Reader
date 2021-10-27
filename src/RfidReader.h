@@ -2,7 +2,6 @@
 #define RfidReader_h
 
 #include <MFRC522.h>
-#include "Definitions.h"
 
 const uint8_t UID_MAX_BYTE_SIZE = 10; 
 
@@ -65,15 +64,14 @@ struct UID {
 class RfidReader
 {
 public:
-  RfidReader(uint8_t ss_pin, uint8_t rst_pin, UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) 
+  RfidReader(uint8_t ss_pin, uint8_t rst_pin, uint8_t id, UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) 
   : m_RfidReader(MFRC522(ss_pin, rst_pin)), m_CompanionTag(companion_tag), m_CurrentTag({{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}})
   {
     m_RfidReader.PCD_Init();
     m_RfidReader.PCD_DumpVersionToSerial();
-    Serial.print("companion tag: "); Serial.println(m_CompanionTag.toString());
+    // Serial.print("companion tag: "); Serial.println(m_CompanionTag.toString());
     m_Callback = nullptr;
-    m_ReaderID = m_ReaderCount;
-    m_ReaderCount += 1;
+    m_ReaderID = id;
   }
 
   ~RfidReader() { free(m_Callback); }
@@ -133,7 +131,6 @@ public:
       MFRC522::PICC_Type type = m_RfidReader.PICC_GetType(m_RfidReader.uid.sak);
       if(type != MFRC522::PICC_Type::PICC_TYPE_UNKNOWN && type != MFRC522::PICC_Type::PICC_TYPE_NOT_COMPLETE)
       {
-        // Serial.print("SAK type: "); Serial.println(m_RfidReader.uid.sak);
         isValid = true;
       }
     }
@@ -175,7 +172,6 @@ public:
     return newTag;
   }
 
-  static int m_ReaderCount;
 private:
   MFRC522 m_RfidReader;
   uint8_t m_ReaderID;
@@ -185,7 +181,5 @@ private:
   void (*m_Callback)(int, bool);
 
 };
-
-int RfidReader::m_ReaderCount = 0;
 
 #endif
