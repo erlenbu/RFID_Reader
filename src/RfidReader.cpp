@@ -129,16 +129,24 @@ void RfidHandler::clearCache() {
 
 void RfidHandler::read() {
     for(uint8_t reader = 0; reader < m_NumReaders; reader++) {
-        if(true == m_ReaderArray[reader].read()) {
-            if(true == m_ReaderArray[reader].isResponseValid()) {
+        if(true == m_ReaderArray[reader].read())
+        {
+            if(true == m_ReaderArray[reader].isResponseValid())
+            {
                 if(true == m_ReaderArray[reader].checkNewTag())
                 {
                 //need to set m_RfidState
                 }
-            } else {
-                Serial.print("Reader "); Serial.print(reader);
-                Serial.println(" read() error");
             }
+            else
+            {
+                // Serial.println("Invalid response");
+            }
+        }
+        else 
+        {
+            Serial.print("Reader "); Serial.print(reader);
+            Serial.println(" read() error");
         }
     }
 }
