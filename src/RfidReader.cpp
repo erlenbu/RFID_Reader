@@ -5,6 +5,7 @@ RfidReader::RfidReader(uint8_t ss_pin, uint8_t rst_pin, uint8_t id, UID companio
 {
     m_RfidReader.PCD_Init();
     m_RfidReader.PCD_DumpVersionToSerial();
+
     // Serial.print("companion tag: "); Serial.println(m_CompanionTag.toString());
     m_Callback = nullptr;
     m_ReaderID = id;
@@ -31,12 +32,12 @@ bool RfidReader::read()
 
     //Look for new cards 
     byte bufferATQA[8];
-        byte bufferSize = sizeof(bufferATQA);
-        m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::TxModeReg, 0x00);
-        m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::RxModeReg, 0x00);
-        m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::ModWidthReg, 0x26);
+    byte bufferSize = sizeof(bufferATQA);
+    m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::TxModeReg, 0x00);
+    m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::RxModeReg, 0x00);
+    m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::ModWidthReg, 0x26);
 
-        MFRC522::StatusCode result = m_RfidReader.PICC_RequestA(bufferATQA, &bufferSize);
+    MFRC522::StatusCode result = m_RfidReader.PICC_RequestA(bufferATQA, &bufferSize);
     if(result != MFRC522::StatusCode::STATUS_OK      &&
         result != MFRC522::StatusCode::STATUS_TIMEOUT)
     {
@@ -112,12 +113,20 @@ bool RfidReader::checkNewTag()
 
 /********** RfidHandler **********/
 
+RfidHandler::RfidHandler() {
+  Serial.println("RfidHandler calling SPI begin");
+  SPI.begin();
+}
+
+RfidHandler::~RfidHandler() {
+    
+}
+
 void RfidHandler::addRfidReader(uint8_t ss_pin, uint8_t rst_pin, void(*callback)(int,bool), UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) {
     m_NumReaders += 1;
     m_ReaderArray = (RfidReader*)realloc(m_ReaderArray, m_NumReaders * sizeof(RfidReader));
     m_ReaderArray[m_NumReaders - 1] = RfidReader(ss_pin, rst_pin, (m_NumReaders - 1), companion_tag);
     m_ReaderArray[m_NumReaders -1 ].setCallback(callback);
-    Serial.print("Added rfid reader, amount of readers: "); Serial.println(m_NumReaders);
 }
 
 void RfidHandler::clearCache() {

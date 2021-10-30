@@ -2,6 +2,7 @@
 #define RfidReader_h
 
 #include <MFRC522.h>
+#include <SPI.h>
 
 const uint8_t UID_MAX_BYTE_SIZE = 10; 
 
