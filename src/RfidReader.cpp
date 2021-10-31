@@ -6,6 +6,10 @@ RfidReader::RfidReader(uint8_t ss_pin, uint8_t rst_pin, uint8_t id, UID companio
     m_RfidReader.PCD_Init();
     m_RfidReader.PCD_DumpVersionToSerial();
 
+    m_RfidReader.uid.size = 10;
+    clearUidCache();
+    m_TagStatus = NOT_PRESENT;
+
     // Serial.print("companion tag: "); Serial.println(m_CompanionTag.toString());
     m_Callback = nullptr;
     m_ReaderID = id;
@@ -26,33 +30,84 @@ void RfidReader::clearUidCache() {
 
 // Due to use of "counterfeit" MFRC522 the library is not completely compatible
 // Allow timeout status as it seems to work even with that status messages 
-bool RfidReader::read()
+bool RfidReader::getData()
 {
     bool status = true;
+    MFRC522::StatusCode result;
 
-    //Look for new cards 
-    byte bufferATQA[8];
-    byte bufferSize = sizeof(bufferATQA);
-    m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::TxModeReg, 0x00);
-    m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::RxModeReg, 0x00);
-    m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::ModWidthReg, 0x26);
-
-    MFRC522::StatusCode result = m_RfidReader.PICC_RequestA(bufferATQA, &bufferSize);
-    if(result != MFRC522::StatusCode::STATUS_OK      &&
-        result != MFRC522::StatusCode::STATUS_TIMEOUT)
+    if(true == m_RfidReader.PICC_IsNewCardPresent()) {
+        //Select card, PICC_ReadCardSerial()
+        result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
+        if( result != MFRC522::StatusCode::STATUS_OK &&
+            result != MFRC522::StatusCode::STATUS_TIMEOUT)
+        {
+            status = false;
+            Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
+        }
+    } else
     {
-        status = false;
-        Serial.print("ERROR: PICC_RequestA returned with status "); Serial.println(result);
+        if(true == m_RfidReader.PICC_IsNewCardPresent()) {}
+        else
+        {
+            clearUidCache();
+        }
+
     }
 
-    //Select card
-    result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
-    if( result != MFRC522::StatusCode::STATUS_OK &&
-        result != MFRC522::StatusCode::STATUS_TIMEOUT)
-    {
-        status = false;
-        Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
-    }
+    // status = m_RfidReader.PICC_ReadCardSerial();
+    // if(true == status) {
+    //     Serial.println("PICC_ReadCardSerial return true");
+    // }
+
+    // 	byte bufferATQA[2];
+	// byte bufferSize = sizeof(bufferATQA);
+
+	// // Reset baud rates
+	// PCD_WriteRegister(TxModeReg, 0x00);
+	// PCD_WriteRegister(RxModeReg, 0x00);
+	// // Reset ModWidthReg
+	// PCD_WriteRegister(ModWidthReg, 0x26);
+
+	// MFRC522::StatusCode result = PICC_RequestA(bufferATQA, &bufferSize);
+	// return (result == STATUS_OK || result == STATUS_COLLISION);
+
+    // //Look for new cards 
+    // byte bufferATQA[8];
+    // byte bufferSize = sizeof(bufferATQA);
+    // m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::TxModeReg, 0x00);
+    // m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::RxModeReg, 0x00);
+    // m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::ModWidthReg, 0x26);
+
+    // MFRC522::StatusCode result = m_RfidReader.PICC_RequestA(bufferATQA, &bufferSize);
+    // // if(result == MFRC522::StatusCode::STATUS_OK || result == MFRC522::StatusCode::STATUS_COLLISION)
+    // // {
+    // //     Serial.println("true");
+    // // }
+    // // else
+    // // {
+
+    // //     Serial.println("false");
+    // // }
+    // if(result != MFRC522::StatusCode::STATUS_OK      &&
+    //     result != MFRC522::StatusCode::STATUS_TIMEOUT)
+    // {
+    //     status = false;
+    //     Serial.print("ERROR: PICC_RequestA returned with status "); Serial.println(result);
+    // }
+
+    // //Select card, PICC_ReadCardSerial()
+    // result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
+    // if( result != MFRC522::StatusCode::STATUS_OK &&
+    //     result != MFRC522::StatusCode::STATUS_TIMEOUT)
+    // {
+    //     status = false;
+    //     Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
+    // }
+
+    // for(int i = 0; i < 10; i++) {
+    //     Serial.print(m_RfidReader.uid.uidByte[i], HEX);
+    // }
+
 
     return status;
 }
@@ -68,15 +123,149 @@ bool RfidReader::isResponseValid()
         MFRC522::PICC_Type type = m_RfidReader.PICC_GetType(m_RfidReader.uid.sak);
         if(type != MFRC522::PICC_Type::PICC_TYPE_UNKNOWN && type != MFRC522::PICC_Type::PICC_TYPE_NOT_COMPLETE)
         {
-        isValid = true;
+            isValid = true;
+        }
+        else
+        {
+            Serial.print("ERROR isResponseValid(): PICC_TYPE "); Serial.println(type);
         }
     }
-
+    else 
+    {
+        Serial.print("ERROR isResponseValid(): uid.size "); Serial.println(m_RfidReader.uid.size);
+    }
     return isValid;
 }
 
-bool RfidReader::checkNewTag() 
+TAG_STATUS RfidReader::checkNewTag() 
 {
+    // bool newTag = false;
+    // if(false == m_CurrentTag.compareRaw(m_RfidReader.uid)) // Tag ID changed
+    // {
+
+    TAG_STATUS tag_status = NOT_PRESENT;
+    memcpy(m_CurrentTag.id, m_RfidReader.uid.uidByte, m_RfidReader.uid.size);
+
+    // Serial.print("Reader "); Serial.print(m_ReaderID);
+    //Check if this is the companion tag
+    if(true == m_CompanionTag.compare(m_CurrentTag))
+    {
+        // Serial.print(" my tag ID! ");
+        // Serial.println(m_CurrentTag.toString());
+        tag_status = PRESENT_COMPANION_TAG;
+
+        if(m_Callback != nullptr)
+        {
+            m_Callback(m_ReaderID, true);
+        }
+    }
+    else
+    {
+        // Serial.print(" Unknown tag ID: ");
+        // Serial.println(m_CurrentTag.toString());
+        tag_status = PRESENT_UNKNOWN_TAG;
+    }
+
+    //     newTag = true;
+    // }
+    // return newTag;
+    return tag_status;
+}
+
+bool RfidReader::read() {
+
+
+    bool status = true;
+    MFRC522::StatusCode result;
+    TAG_STATUS tag_status = m_TagStatus;
+
+    //PICC_IsNewCardPresent alernates between true and false when a tag is detected, check twice to make sure the tag is gone
+    if(true == m_RfidReader.PICC_IsNewCardPresent()) {
+        
+        //Select card, PICC_ReadCardSerial()
+        result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
+        if( result != MFRC522::StatusCode::STATUS_OK &&
+            result != MFRC522::StatusCode::STATUS_TIMEOUT)
+        {
+            status = false;
+            Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
+        }
+        else
+        {
+            if(true == isResponseValid())
+            {
+                // if(false == m_CurrentTag.compareRaw(m_RfidReader.uid))
+                // {
+                    tag_status = checkNewTag();
+                    // Serial.print("Tag "); Serial.println(tag_status); 
+                // }
+
+                // if(true == checkNewTag())
+                // {
+                // //need to set m_RfidState 
+                // }
+            }
+            else
+            {
+                status = false;
+                // Serial.println("Invalid response");
+            }
+        }
+    } 
+    else
+    {
+        if(false == m_RfidReader.PICC_IsNewCardPresent()) {
+            // Serial.println("Tag gone");
+            tag_status = NOT_PRESENT;
+            clearUidCache();
+        }
+        // else
+        // {
+        //     // Serial.println("Tag gone");
+        //     clearUidCache();
+        // }
+
+    }
+
+    if(m_TagStatus != tag_status) {
+        m_TagStatus = tag_status;
+        Serial.print("Reader "); Serial.print(m_ReaderID); Serial.print(" m_TagStatus changed to "); Serial.println(m_TagStatus);
+    }
+
+    return status;
+
+
+    // if(true == getData())
+    // {
+    //     if(true == isResponseValid())
+    //     {
+    //         if(true == checkNewTag())
+    //         {
+    //         //need to set m_RfidState
+    //         }
+    //     }
+    //     else
+    //     {
+    //         // Serial.println("Invalid response");
+    //     }
+    // }
+    // else 
+    // {
+    //     Serial.print("Reader "); Serial.print(m_ReaderID);
+    //     Serial.println(" read() error");
+    // }
+}
+
+
+
+bool RfidReader::checkNewTagContinuum() {
+
+    for(int i = 0; i < 10; i++) {
+        Serial.print(m_RfidReader.uid.uidByte[i], HEX);
+    }
+
+    Serial.println();
+
     bool newTag = false;
     if(false == m_CurrentTag.compareRaw(m_RfidReader.uid)) // Tag ID changed
     {
@@ -96,16 +285,13 @@ bool RfidReader::checkNewTag()
         }
         else
         {
-        Serial.print(" Unknown tag ID: ");
-        Serial.println(m_CurrentTag.toString());
-        if(m_Callback != nullptr)
-        {
-            m_Callback(m_ReaderID, false);
-        }
+            Serial.print(" Unknown tag ID: ");
+            Serial.println(m_CurrentTag.toString());
         }
 
         newTag = true;
     }
+    clearUidCache();
     return newTag;
 }
 
@@ -138,25 +324,26 @@ void RfidHandler::clearCache() {
 
 void RfidHandler::read() {
     for(uint8_t reader = 0; reader < m_NumReaders; reader++) {
-        if(true == m_ReaderArray[reader].read())
-        {
-            if(true == m_ReaderArray[reader].isResponseValid())
-            {
-                if(true == m_ReaderArray[reader].checkNewTag())
-                {
-                //need to set m_RfidState
-                }
-            }
-            else
-            {
-                // Serial.println("Invalid response");
-            }
-        }
-        else 
-        {
-            Serial.print("Reader "); Serial.print(reader);
-            Serial.println(" read() error");
-        }
+        m_ReaderArray[reader].read();
+    //     if(true == m_ReaderArray[reader].getData())
+    //     {
+    //         // if(true == m_ReaderArray[reader].isResponseValid())
+    //         // {
+    //         //     if(true == m_ReaderArray[reader].checkNewTag())
+    //         //     {
+    //         //     //need to set m_RfidState
+    //         //     }
+    //         // }
+    //         // else
+    //         // {
+    //         //     // Serial.println("Invalid response");
+    //         // }
+    //     }
+    //     else 
+    //     {
+    //         Serial.print("Reader "); Serial.print(reader);
+    //         Serial.println(" read() error");
+    //     }
     }
 }
 

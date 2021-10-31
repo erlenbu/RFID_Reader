@@ -6,6 +6,12 @@
 
 const uint8_t UID_MAX_BYTE_SIZE = 10; 
 
+enum TAG_STATUS {
+  NOT_PRESENT = 0,
+  PRESENT_UNKNOWN_TAG = 1,
+  PRESENT_COMPANION_TAG = 2
+};
+
 struct UID {
   byte id[UID_MAX_BYTE_SIZE];
 
@@ -73,15 +79,20 @@ public:
 
   void clearUidCache();
 
-  bool read();
+  bool getData();
 
   bool isResponseValid();
 
-  bool checkNewTag();
+  TAG_STATUS checkNewTag();
+
+  bool read();
+
+  bool checkNewTagContinuum();
 
 private:
   MFRC522 m_RfidReader;
   uint8_t m_ReaderID;
+  TAG_STATUS m_TagStatus;
   UID m_CompanionTag;
   UID m_CurrentTag;
   
