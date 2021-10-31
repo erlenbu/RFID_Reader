@@ -75,19 +75,13 @@ public:
 
   ~RfidReader();
 
-  void setCallback(void(*callback)(int,bool));
+  inline TAG_STATUS getTagStatus() { return m_TagStatus; }
+
+  void setCallback(void(*callback)(int,TAG_STATUS));
 
   void clearUidCache();
 
-  bool getData();
-
-  bool isResponseValid();
-
-  TAG_STATUS checkNewTag();
-
   bool read();
-
-  bool checkNewTagContinuum();
 
 private:
   MFRC522 m_RfidReader;
@@ -96,8 +90,13 @@ private:
   UID m_CompanionTag;
   UID m_CurrentTag;
   
-  void (*m_Callback)(int, bool);
+  void (*m_Callback)(int, TAG_STATUS);
 
+  bool getData();
+
+  bool isResponseValid();
+
+  TAG_STATUS checkNewTag();
 };
 
 class RfidHandler
@@ -110,7 +109,7 @@ public:
 
   uint8_t getReaderAmount() { return m_NumReaders; }
 
-  void addRfidReader(uint8_t ss_pin, uint8_t rst_pin, void(*callback)(int,bool), UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}});
+  void addRfidReader(uint8_t ss_pin, uint8_t rst_pin, void(*change_cb)(int,TAG_STATUS), UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}});
 
   void clearCache();
 

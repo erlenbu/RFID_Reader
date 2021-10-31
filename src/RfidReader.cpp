@@ -17,7 +17,7 @@ RfidReader::RfidReader(uint8_t ss_pin, uint8_t rst_pin, uint8_t id, UID companio
 
 RfidReader::~RfidReader() { free(m_Callback); }
 
-void RfidReader::setCallback(void(*callback)(int,bool))
+void RfidReader::setCallback(void(*callback)(int,TAG_STATUS))
 {
     m_Callback = callback;
 }
@@ -54,61 +54,6 @@ bool RfidReader::getData()
 
     }
 
-    // status = m_RfidReader.PICC_ReadCardSerial();
-    // if(true == status) {
-    //     Serial.println("PICC_ReadCardSerial return true");
-    // }
-
-    // 	byte bufferATQA[2];
-	// byte bufferSize = sizeof(bufferATQA);
-
-	// // Reset baud rates
-	// PCD_WriteRegister(TxModeReg, 0x00);
-	// PCD_WriteRegister(RxModeReg, 0x00);
-	// // Reset ModWidthReg
-	// PCD_WriteRegister(ModWidthReg, 0x26);
-
-	// MFRC522::StatusCode result = PICC_RequestA(bufferATQA, &bufferSize);
-	// return (result == STATUS_OK || result == STATUS_COLLISION);
-
-    // //Look for new cards 
-    // byte bufferATQA[8];
-    // byte bufferSize = sizeof(bufferATQA);
-    // m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::TxModeReg, 0x00);
-    // m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::RxModeReg, 0x00);
-    // m_RfidReader.PCD_WriteRegister(MFRC522::PCD_Register::ModWidthReg, 0x26);
-
-    // MFRC522::StatusCode result = m_RfidReader.PICC_RequestA(bufferATQA, &bufferSize);
-    // // if(result == MFRC522::StatusCode::STATUS_OK || result == MFRC522::StatusCode::STATUS_COLLISION)
-    // // {
-    // //     Serial.println("true");
-    // // }
-    // // else
-    // // {
-
-    // //     Serial.println("false");
-    // // }
-    // if(result != MFRC522::StatusCode::STATUS_OK      &&
-    //     result != MFRC522::StatusCode::STATUS_TIMEOUT)
-    // {
-    //     status = false;
-    //     Serial.print("ERROR: PICC_RequestA returned with status "); Serial.println(result);
-    // }
-
-    // //Select card, PICC_ReadCardSerial()
-    // result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
-    // if( result != MFRC522::StatusCode::STATUS_OK &&
-    //     result != MFRC522::StatusCode::STATUS_TIMEOUT)
-    // {
-    //     status = false;
-    //     Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
-    // }
-
-    // for(int i = 0; i < 10; i++) {
-    //     Serial.print(m_RfidReader.uid.uidByte[i], HEX);
-    // }
-
-
     return status;
 }
 
@@ -139,10 +84,6 @@ bool RfidReader::isResponseValid()
 
 TAG_STATUS RfidReader::checkNewTag() 
 {
-    // bool newTag = false;
-    // if(false == m_CurrentTag.compareRaw(m_RfidReader.uid)) // Tag ID changed
-    // {
-
     TAG_STATUS tag_status = NOT_PRESENT;
     memcpy(m_CurrentTag.id, m_RfidReader.uid.uidByte, m_RfidReader.uid.size);
 
@@ -153,11 +94,6 @@ TAG_STATUS RfidReader::checkNewTag()
         // Serial.print(" my tag ID! ");
         // Serial.println(m_CurrentTag.toString());
         tag_status = PRESENT_COMPANION_TAG;
-
-        if(m_Callback != nullptr)
-        {
-            m_Callback(m_ReaderID, true);
-        }
     }
     else
     {
@@ -166,9 +102,6 @@ TAG_STATUS RfidReader::checkNewTag()
         tag_status = PRESENT_UNKNOWN_TAG;
     }
 
-    //     newTag = true;
-    // }
-    // return newTag;
     return tag_status;
 }
 
@@ -194,16 +127,7 @@ bool RfidReader::read() {
         {
             if(true == isResponseValid())
             {
-                // if(false == m_CurrentTag.compareRaw(m_RfidReader.uid))
-                // {
-                    tag_status = checkNewTag();
-                    // Serial.print("Tag "); Serial.println(tag_status); 
-                // }
-
-                // if(true == checkNewTag())
-                // {
-                // //need to set m_RfidState 
-                // }
+                tag_status = checkNewTag();
             }
             else
             {
@@ -219,82 +143,19 @@ bool RfidReader::read() {
             tag_status = NOT_PRESENT;
             clearUidCache();
         }
-        // else
-        // {
-        //     // Serial.println("Tag gone");
-        //     clearUidCache();
-        // }
-
     }
 
     if(m_TagStatus != tag_status) {
         m_TagStatus = tag_status;
-        Serial.print("Reader "); Serial.print(m_ReaderID); Serial.print(" m_TagStatus changed to "); Serial.println(m_TagStatus);
+        // Serial.print("Reader "); Serial.print(m_ReaderID); Serial.print(" m_TagStatus changed to "); Serial.println(m_TagStatus);
+        if(m_Callback != nullptr)
+        {
+            m_Callback(m_ReaderID, m_TagStatus);
+        }
     }
 
     return status;
-
-
-    // if(true == getData())
-    // {
-    //     if(true == isResponseValid())
-    //     {
-    //         if(true == checkNewTag())
-    //         {
-    //         //need to set m_RfidState
-    //         }
-    //     }
-    //     else
-    //     {
-    //         // Serial.println("Invalid response");
-    //     }
-    // }
-    // else 
-    // {
-    //     Serial.print("Reader "); Serial.print(m_ReaderID);
-    //     Serial.println(" read() error");
-    // }
 }
-
-
-
-bool RfidReader::checkNewTagContinuum() {
-
-    for(int i = 0; i < 10; i++) {
-        Serial.print(m_RfidReader.uid.uidByte[i], HEX);
-    }
-
-    Serial.println();
-
-    bool newTag = false;
-    if(false == m_CurrentTag.compareRaw(m_RfidReader.uid)) // Tag ID changed
-    {
-        memcpy(m_CurrentTag.id, m_RfidReader.uid.uidByte, m_RfidReader.uid.size);
-
-        Serial.print("Reader "); Serial.print(m_ReaderID);
-        //Check if this is the companion tag
-        if(true == m_CompanionTag.compare(m_CurrentTag))
-        {
-        Serial.print(" my tag ID! ");
-        Serial.println(m_CurrentTag.toString());
-
-        if(m_Callback != nullptr)
-        {
-            m_Callback(m_ReaderID, true);
-        }
-        }
-        else
-        {
-            Serial.print(" Unknown tag ID: ");
-            Serial.println(m_CurrentTag.toString());
-        }
-
-        newTag = true;
-    }
-    clearUidCache();
-    return newTag;
-}
-
 
 
 /********** RfidHandler **********/
@@ -305,18 +166,18 @@ RfidHandler::RfidHandler() {
 }
 
 RfidHandler::~RfidHandler() {
-    
+    free(m_ReaderArray);
 }
 
-void RfidHandler::addRfidReader(uint8_t ss_pin, uint8_t rst_pin, void(*callback)(int,bool), UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) {
+void RfidHandler::addRfidReader(uint8_t ss_pin, uint8_t rst_pin, void(*change_cb)(int,TAG_STATUS), UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) {
     m_NumReaders += 1;
     m_ReaderArray = (RfidReader*)realloc(m_ReaderArray, m_NumReaders * sizeof(RfidReader));
     m_ReaderArray[m_NumReaders - 1] = RfidReader(ss_pin, rst_pin, (m_NumReaders - 1), companion_tag);
-    m_ReaderArray[m_NumReaders -1 ].setCallback(callback);
+    m_ReaderArray[m_NumReaders - 1].setCallback(change_cb);
+    // m_StatusArr = (TAG_STATUS*)realloc(m_StatusArr, m_NumReaders * sizeof(TAG_STATUS));
 }
 
 void RfidHandler::clearCache() {
-    Serial.println("Clearing cache");
     for(uint8_t reader = 0; reader < m_NumReaders; reader++) {
         m_ReaderArray[reader].clearUidCache();
     }
@@ -325,25 +186,6 @@ void RfidHandler::clearCache() {
 void RfidHandler::read() {
     for(uint8_t reader = 0; reader < m_NumReaders; reader++) {
         m_ReaderArray[reader].read();
-    //     if(true == m_ReaderArray[reader].getData())
-    //     {
-    //         // if(true == m_ReaderArray[reader].isResponseValid())
-    //         // {
-    //         //     if(true == m_ReaderArray[reader].checkNewTag())
-    //         //     {
-    //         //     //need to set m_RfidState
-    //         //     }
-    //         // }
-    //         // else
-    //         // {
-    //         //     // Serial.println("Invalid response");
-    //         // }
-    //     }
-    //     else 
-    //     {
-    //         Serial.print("Reader "); Serial.print(reader);
-    //         Serial.println(" read() error");
-    //     }
     }
 }
 
