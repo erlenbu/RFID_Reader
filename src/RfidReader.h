@@ -89,10 +89,11 @@ private:
   TAG_STATUS m_TagStatus;
   UID m_CompanionTag;
   UID m_CurrentTag;
+  uint8_t m_FilterIterator;
   
   void (*m_Callback)(int, TAG_STATUS);
 
-  bool getData();
+  bool interpretTagData(TAG_STATUS& tag_status);
 
   bool isResponseValid();
 

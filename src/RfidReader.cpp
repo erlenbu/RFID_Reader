@@ -6,6 +6,7 @@ RfidReader::RfidReader(uint8_t ss_pin, uint8_t rst_pin, uint8_t id, UID companio
     m_RfidReader.PCD_Init();
     m_RfidReader.PCD_DumpVersionToSerial();
 
+    m_FilterIterator = 0;
     m_RfidReader.uid.size = 10;
     clearUidCache();
     m_TagStatus = NOT_PRESENT;
@@ -30,28 +31,30 @@ void RfidReader::clearUidCache() {
 
 // Due to use of "counterfeit" MFRC522 the library is not completely compatible
 // Allow timeout status as it seems to work even with that status messages 
-bool RfidReader::getData()
+bool RfidReader::interpretTagData(TAG_STATUS& tag_status)
 {
     bool status = true;
     MFRC522::StatusCode result;
-
-    if(true == m_RfidReader.PICC_IsNewCardPresent()) {
-        //Select card, PICC_ReadCardSerial()
-        result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
-        if( result != MFRC522::StatusCode::STATUS_OK &&
-            result != MFRC522::StatusCode::STATUS_TIMEOUT)
-        {
-            status = false;
-            Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
-        }
-    } else
+    //Select card, PICC_ReadCardSerial()
+    result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
+    if( result != MFRC522::StatusCode::STATUS_OK &&
+        result != MFRC522::StatusCode::STATUS_TIMEOUT)
     {
-        if(true == m_RfidReader.PICC_IsNewCardPresent()) {}
+        status = false;
+        Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
+    }
+    else
+    {
+        // Serial.println("Calling isResponseValid");
+        if(true == isResponseValid())
+        {
+            tag_status = checkNewTag();
+        }
         else
         {
-            clearUidCache();
+            status = false;
+            Serial.println("Invalid response");
         }
-
     }
 
     return status;
@@ -114,43 +117,35 @@ bool RfidReader::read() {
 
     //PICC_IsNewCardPresent alernates between true and false when a tag is detected, check twice to make sure the tag is gone
     if(true == m_RfidReader.PICC_IsNewCardPresent()) {
-        
-        //Select card, PICC_ReadCardSerial()
-        result = m_RfidReader.PICC_Select(&m_RfidReader.uid);
-        if( result != MFRC522::StatusCode::STATUS_OK &&
-            result != MFRC522::StatusCode::STATUS_TIMEOUT)
-        {
-            status = false;
-            Serial.print("ERROR: PICC_Select returns status "); Serial.println(result);
-        }
-        else
-        {
-            if(true == isResponseValid())
-            {
-                tag_status = checkNewTag();
-            }
-            else
-            {
-                status = false;
-                // Serial.println("Invalid response");
-            }
-        }
+        interpretTagData(tag_status);
     } 
     else
     {
         if(false == m_RfidReader.PICC_IsNewCardPresent()) {
             // Serial.println("Tag gone");
             tag_status = NOT_PRESENT;
-            clearUidCache();
+            // clearUidCache();
+        }
+        else
+        {
+            interpretTagData(tag_status);
         }
     }
 
+    //Filter out single time errors
     if(m_TagStatus != tag_status) {
-        m_TagStatus = tag_status;
-        // Serial.print("Reader "); Serial.print(m_ReaderID); Serial.print(" m_TagStatus changed to "); Serial.println(m_TagStatus);
-        if(m_Callback != nullptr)
+        m_FilterIterator++;
+        Serial.println(m_FilterIterator);
+        if(m_FilterIterator >= 3)
         {
-            m_Callback(m_ReaderID, m_TagStatus);
+            m_FilterIterator = 0;
+            m_TagStatus = tag_status;
+            // Serial.print("Reader "); Serial.print(m_ReaderID); Serial.print(" m_TagStatus changed to "); Serial.println(m_TagStatus);
+            if(m_Callback != nullptr)
+            {
+                m_Callback(m_ReaderID, m_TagStatus);
+            }
+
         }
     }
 
