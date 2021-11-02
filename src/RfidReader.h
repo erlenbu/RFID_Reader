@@ -108,17 +108,22 @@ public:
 
   ~RfidHandler();
 
-  uint8_t getReaderAmount() { return m_NumReaders; }
-
-  void addRfidReader(uint8_t ss_pin, uint8_t rst_pin, void(*change_cb)(int,TAG_STATUS), UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}});
+  void addRfidReader(uint8_t ss_pin, uint8_t rst_pin, UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}});
 
   void clearCache();
 
   void read();
 
+  virtual uint8_t getReaderAmount() { return m_NumReaders;  }
+
+  virtual int readRfidState(byte* data);
+
 private:
   static RfidReader* m_ReaderArray;
   static uint8_t m_NumReaders;
+  static byte* m_States;
+
+  static void tagChangeEvent(int id, TAG_STATUS state);
 };
 
 

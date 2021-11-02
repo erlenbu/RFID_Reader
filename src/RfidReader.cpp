@@ -135,12 +135,10 @@ bool RfidReader::read() {
     //Filter out single time errors
     if(m_TagStatus != tag_status) {
         m_FilterIterator++;
-        Serial.println(m_FilterIterator);
-        if(m_FilterIterator >= 3)
+        if(m_FilterIterator >= 5)
         {
             m_FilterIterator = 0;
             m_TagStatus = tag_status;
-            // Serial.print("Reader "); Serial.print(m_ReaderID); Serial.print(" m_TagStatus changed to "); Serial.println(m_TagStatus);
             if(m_Callback != nullptr)
             {
                 m_Callback(m_ReaderID, m_TagStatus);
@@ -155,27 +153,52 @@ bool RfidReader::read() {
 
 /********** RfidHandler **********/
 
-RfidHandler::RfidHandler() {
+RfidHandler::RfidHandler()
+{
   Serial.println("RfidHandler calling SPI begin");
   SPI.begin();
 }
 
 RfidHandler::~RfidHandler() {
     free(m_ReaderArray);
+    free(m_States);
 }
 
-void RfidHandler::addRfidReader(uint8_t ss_pin, uint8_t rst_pin, void(*change_cb)(int,TAG_STATUS), UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) {
+void RfidHandler::addRfidReader(uint8_t ss_pin, uint8_t rst_pin, UID companion_tag = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}}) {
     m_NumReaders += 1;
     m_ReaderArray = (RfidReader*)realloc(m_ReaderArray, m_NumReaders * sizeof(RfidReader));
     m_ReaderArray[m_NumReaders - 1] = RfidReader(ss_pin, rst_pin, (m_NumReaders - 1), companion_tag);
-    m_ReaderArray[m_NumReaders - 1].setCallback(change_cb);
-    // m_StatusArr = (TAG_STATUS*)realloc(m_StatusArr, m_NumReaders * sizeof(TAG_STATUS));
+    m_ReaderArray[m_NumReaders - 1].setCallback(tagChangeEvent);
+    m_States = (byte*) realloc(m_States, m_NumReaders * sizeof(byte));
+    for(int i = 0; i < m_NumReaders; i++) { m_States[i] = 0; }
 }
 
 void RfidHandler::clearCache() {
     for(uint8_t reader = 0; reader < m_NumReaders; reader++) {
         m_ReaderArray[reader].clearUidCache();
     }
+}
+
+void RfidHandler::tagChangeEvent(int id, TAG_STATUS state) {
+    m_States[id] = state;
+    Serial.print("Reader "); Serial.print(id); Serial.print(" state "); Serial.println(m_States[id]);
+    for(int i = 0; i < m_NumReaders; i++)
+    {
+      Serial.print(m_States[i]);
+    }
+    Serial.println();
+
+}
+
+
+int RfidHandler::readRfidState(byte* data) 
+{    
+    for(int i = 0; i < m_NumReaders; i++)
+    {
+        data[i] = m_States[i];
+    }
+
+    return m_NumReaders;
 }
 
 void RfidHandler::read() {
@@ -186,3 +209,4 @@ void RfidHandler::read() {
 
 RfidReader* RfidHandler::m_ReaderArray = nullptr;
 uint8_t RfidHandler::m_NumReaders = 0;
+byte* RfidHandler::m_States = nullptr;
