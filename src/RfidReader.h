@@ -114,9 +114,9 @@ public:
 
   void read();
 
-  virtual uint8_t getReaderAmount() { return m_NumReaders;  }
+  uint8_t getReaderAmount() { return m_NumReaders;  }
 
-  virtual int readRfidState(byte* data);
+  int readRfidState(byte* data);
 
 private:
   static RfidReader* m_ReaderArray;
